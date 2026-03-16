@@ -1,4 +1,11 @@
-import { MdPlayArrow, MdCancel, MdDelete, MdEdit, MdSwapHoriz } from "react-icons/md";
+import {
+  MdPlayArrow,
+  MdCancel,
+  MdDelete,
+  MdEdit,
+  MdSwapHoriz,
+  MdContentCopy,
+} from "react-icons/md";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { apiUrl } from "../../api/api";
 import { useMatches } from "../../hooks";
@@ -54,6 +61,8 @@ const MatchRow = ({ match, onEdit }: MatchRowProps) => {
   const { gameData } = useGameData();
   const [teamOne, setTeamOne] = React.useState<Team>();
   const [teamTwo, setTeamTwo] = React.useState<Team>();
+  const [copyState, setCopyState] = React.useState<"idle" | "copied" | "failed">("idle");
+  const [reverseBlink, setReverseBlink] = React.useState(false);
 
 
   React.useEffect(() => {
@@ -72,6 +81,26 @@ const MatchRow = ({ match, onEdit }: MatchRowProps) => {
     fetchTeams();
   }, [match]);
 
+  React.useEffect(() => {
+    if (copyState === "idle") return;
+
+    const timeout = window.setTimeout(() => {
+      setCopyState("idle");
+    }, 2000);
+
+    return () => window.clearTimeout(timeout);
+  }, [copyState]);
+
+  React.useEffect(() => {
+    if (!reverseBlink) return;
+
+    const timeout = window.setTimeout(() => {
+      setReverseBlink(false);
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [reverseBlink]);
+
   const handleEditClick = () => {
     if (onEdit) {
       onEdit(match);
@@ -81,6 +110,7 @@ const MatchRow = ({ match, onEdit }: MatchRowProps) => {
   const handleReverseSides = async () => {
     try {
       if (!gameData || !gameData.map || !gameData.map.name) return;
+      setReverseBlink(true);
       const mapName = gameData.map.name.substring(gameData.map.name.lastIndexOf("/") + 1);
       const veto = match.vetos.find((v) => v.mapName === mapName);
       if (!veto) return;
@@ -93,6 +123,54 @@ const MatchRow = ({ match, onEdit }: MatchRowProps) => {
       console.error("Failed to reverse sides on veto:", err);
     }
   };
+
+  const copyText = async (value: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = value;
+    textArea.setAttribute("readonly", "");
+    textArea.style.position = "absolute";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textArea);
+  };
+
+  const handleCopyHudLink = async () => {
+    const fallbackUrl = "http://localhost:1349/api/hud";
+
+    try {
+      const response = await fetch(`${apiUrl}/system/hud-url`);
+      const data = response.ok ? ((await response.json()) as { url?: string }) : null;
+      const url = data?.url || fallbackUrl;
+      await copyText(url);
+      setCopyState("copied");
+    } catch (error) {
+      try {
+        await copyText(fallbackUrl);
+        setCopyState("copied");
+      } catch {
+        setCopyState("failed");
+      }
+      console.error("Failed to copy HUD link:", error);
+    }
+  };
+
+  const copyTitle =
+    copyState === "copied"
+      ? "Copied HUD link"
+      : copyState === "failed"
+        ? "Copy failed"
+        : "Copy HUD link";
+  const copyButtonClass =
+    copyState === "idle" ? "" : "bg-background-light ring-2 ring-primary transition-all";
+  const reverseButtonClass =
+    reverseBlink ? "bg-background-light ring-2 ring-primary transition-all" : "";
 
   return (
     <tr id={"match_" + match.id}>
@@ -135,9 +213,17 @@ const MatchRow = ({ match, onEdit }: MatchRowProps) => {
                 <MdCancel className="size-6 text-secondary-light" />
               </PrimaryButton>
               <PrimaryButton
+                onClick={handleCopyHudLink}
+                title={copyTitle}
+                className={copyButtonClass}
+              >
+                <MdContentCopy className="size-6" />
+              </PrimaryButton>
+              <PrimaryButton
                 onClick={() => handleReverseSides()}
                 title="Reverse sides for current map veto"
                 disabled={!canReverseSides(match, gameData)}
+                className={reverseButtonClass}
               >
                 <MdSwapHoriz className="size-6" />
               </PrimaryButton>
@@ -146,9 +232,18 @@ const MatchRow = ({ match, onEdit }: MatchRowProps) => {
           currentMatch && currentMatch.id !== match.id ? (
             <></>
           ) : (
-            <PrimaryButton onClick={() => handleStartMatch(match.id)}>
-              <MdPlayArrow className="size-6" />
-            </PrimaryButton>
+            <>
+              <PrimaryButton onClick={handleStartMatch.bind(null, match.id)}>
+                <MdPlayArrow className="size-6" />
+              </PrimaryButton>
+              <PrimaryButton
+                onClick={handleCopyHudLink}
+                title={copyTitle}
+                className={copyButtonClass}
+              >
+                <MdContentCopy className="size-6" />
+              </PrimaryButton>
+            </>
           )
         )}
             <PrimaryButton onClick={() => handleEditClick()}>

@@ -8,6 +8,7 @@ import { HudRoutes } from "./huds/huds.routes.js";
 import { readGameData } from "./gsi/gsi.js";
 import { cameraRoutes } from "./cameras/cameras.routes.js";
 import { coachRoutes } from "./coaches/coaches.routes.js";
+import { getHudUrlHandler } from "./system/system.controller.js";
 
 export const APIRouter = Router();
 
@@ -19,5 +20,6 @@ APIRouter.use("/coach", coachRoutes);
 APIRouter.use("/tournament", tournmentRoutes);
 APIRouter.use("/camera", cameraRoutes);
 APIRouter.get("/radar/maps", getMapsHandler);
+APIRouter.get("/system/hud-url", getHudUrlHandler);
 APIRouter.use("/hud", HudRoutes);
 APIRouter.post("/gsi", readGameData);
